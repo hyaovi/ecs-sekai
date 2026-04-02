@@ -1,0 +1,35 @@
+{
+   "name": "@sekai/ecs",
+   "description": "Class-based Entity Component System.",
+   "private": true,
+   "version": "0.0.0",
+   "type": "module",
+   "exports": {
+      ".": "./src/index.ts"
+   },
+   "scripts": {
+      "test": "vitest",
+      "bench": "tsx ./src/benchmarks/bench.ts",
+      "bench:browser": "vite --open bench.html"
+   },
+   "author": {
+      "name": "Yaovi Houngue",
+      "email": "hello@yaovi.dev"
+   },
+   "repository": {
+      "type": "git",
+      "url": "git+https://github.com/hyaovi/sekai-seisei.git"
+   },
+   "bugs": {
+      "url": "https://github.com/hyaovi/sekai-seisei/issues"
+   },
+   "homepage": "https://github.com/hyaovi/sekai-seisei#readme",
+   "devDependencies": {
+      "bitecs": "^0.4.0",
+      "tinybench": "^6.0.0",
+      "tsx": "^4.21.0",
+      "typescript": "~6.0.2",
+      "vite": "^8.0.3",
+      "vitest": "^4.1.2"
+   }
+}

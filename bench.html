@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8" />
+      <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Sekai-ECS</title>
+   </head>
+
+   <body>
+      <div id="app">
+         <h1>dev console</h1>
+         <button id="start">start</button>
+      </div>
+      <script type="module">
+         const btn = document.querySelector("#start");
+         btn.addEventListener("click", async () => {
+            console.log("@ sr");
+            try {
+               await import("./src/benchmarks/bench.ts");
+            } catch (error) {
+               console.error(error);
+            }
+         });
+      </script>
+   </body>
+   <style>
+      html,
+      body {
+         font-family: "Inter", sans-serif;
+      }
+   </style>
+</html>
