@@ -1,9 +1,10 @@
 import { defineComponent, Types } from "../core/component";
 
 export const LightType = {
-   Point: 0,
+   Ambient: 0,
    Directional: 1,
    Spot: 2,
+   Point: 3,
 };
 
 export const GeometryType = {
@@ -23,6 +24,13 @@ export const BlendingType = {
 export const ProjectionType = {
    Perspective: 0,
    Orthographic: 1,
+};
+export const MaterialType = {
+   Standard: 0,
+   Phong: 1,
+   Basic: 2,
+   Physical: 3,
+   Sprite: 4,
 };
 
 export const Transform = defineComponent({

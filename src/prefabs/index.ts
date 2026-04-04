@@ -12,6 +12,7 @@ export {
    GeometryType,
    BlendingType,
    ProjectionType,
+   MaterialType,
 } from "./components";
 export { type Prefab, definePrefab } from "./prefab-builder";
 
