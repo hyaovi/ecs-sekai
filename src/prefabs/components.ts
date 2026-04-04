@@ -5,33 +5,33 @@ export const LightType = {
    Directional: 1,
    Spot: 2,
    Point: 3,
-};
+} as const;
 
 export const GeometryType = {
    Box: 0,
    Sphere: 1,
    Plane: 2,
    Custom: 3,
-};
+} as const;
 
 export const BlendingType = {
    None: 0,
    Normal: 1,
    Additive: 2,
    Subtractive: 3,
-};
+} as const;
 
 export const ProjectionType = {
    Perspective: 0,
    Orthographic: 1,
-};
+} as const;
 export const MaterialType = {
    Standard: 0,
    Phong: 1,
    Basic: 2,
    Physical: 3,
    Sprite: 4,
-};
+} as const;
 
 export const Transform = defineComponent({
    name: "Transform",
@@ -60,7 +60,6 @@ export const Meta = defineComponent({
       id: Types.string, // External UUID
       locked: Types.bool,
       active: Types.bool,
-      order: Types.string,
    },
 });
 
@@ -106,7 +105,7 @@ export const Light = defineComponent({
    name: "Light",
    description: "Light source parameters",
    schema: {
-      type: Types.u8, // Enum: 0=Point, 1=Dir, 2=Spot
+      type: Types.u8,
       color: Types.u32, // Packed Hex
       intensity: Types.f32,
       range: Types.f32,
@@ -135,8 +134,6 @@ export const Model = defineComponent({
    description: "High-level 3D model container",
    schema: {
       assetId: Types.u32, // Pointer to GLTF/FBX Resource
-      isLoaded: Types.bool,
-      skeletonId: Types.i32, // Pointer to Skeleton entity
       animationState: Types.u8,
    },
 });
