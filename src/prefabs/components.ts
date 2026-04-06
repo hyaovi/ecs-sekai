@@ -94,7 +94,6 @@ export const Renderable = defineComponent({
    description: "Controls for the rendering pipeline",
    schema: {
       visible: Types.bool,
-      layer: Types.u8,
       castShadows: Types.bool,
       receiveShadows: Types.bool,
       frustumCulled: Types.bool,
@@ -107,10 +106,8 @@ export const Light = defineComponent({
    schema: {
       type: Types.u8,
       color: Types.u32, // Packed Hex
+      shadow: Types.bool,
       intensity: Types.f32,
-      range: Types.f32,
-      innerAngle: Types.f32, // For SpotLights
-      outerAngle: Types.f32,
    },
 });
 
@@ -124,7 +121,6 @@ export const Camera = defineComponent({
       far: Types.f32,
       aspect: Types.f32,
       projection: Types.u8, // 0=Perspective, 1=Ortho
-      priority: Types.u8, // For multi-camera setups
    },
 });
 
