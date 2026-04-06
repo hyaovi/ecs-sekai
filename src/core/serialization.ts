@@ -20,10 +20,10 @@ function captureEntityData(eid: EntityId, world: Sekai): EntityData {
       isAlive: world.entities[eid] === 0 ? 0 : 1,
       components: [],
    };
-   world.componentMasksMap;
-   const stores = [...world.componentStoresMap.values()];
+   const stores = world.componentStoresArray;
    for (let i = 0; i < stores.length; i++) {
       const store = stores[i];
+      if (store === undefined) continue;
       if (world.hasComponentMask(eid, store.bitFlag)) {
          const def = store.definition;
          const schema = def.schema;

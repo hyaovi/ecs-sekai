@@ -27,11 +27,10 @@ export class Sekai {
 
    entityCursor: number;
    maxEid = MAX_ENTITIES;
-   componentMasksMap: Map<ComponentDefinition, number>;
    componentDefinitions: Map<string, ComponentDefinition>;
-   componentStoresMap: Map<ComponentDefinition, SchemaToStore<any>>;
    componentBitCounter: number;
-   componentIdMasks: SparseSet;
+   componentStoresArray: Store[];
+   componentMasksArray: number[];
    deferring: boolean;
    deferredOps: DeferredOp[];
    // queries
@@ -58,10 +57,9 @@ export class Sekai {
       this.systemsRunners = [];
       // components
       this.componentBitCounter = 0;
-      this.componentStoresMap = new Map();
-      this.componentMasksMap = new Map();
       this.componentDefinitions = new Map();
-      this.componentIdMasks = new SparseSet();
+      this.componentStoresArray = [];
+      this.componentMasksArray = [];
       // queries
       this.queryCache = new Map();
       this.queries = [];
@@ -87,8 +85,8 @@ export class Sekai {
       this.entityMask.fill(0);
       this.reservedEntities.fill(0);
 
-      for (const store of this.componentStoresMap.values()) {
-         store.reset();
+      for (const store of this.componentStoresArray) {
+         if (store !== undefined) store.reset();
       }
    }
 
@@ -151,7 +149,7 @@ export class Sekai {
       this.validateEid(eid);
       if (this.entities[eid] === 0) return;
 
-      // const prevMask = this.entityMask[eid];
+      const prevMask = this.entityMask[eid];
       this.updateEntityMask(eid, 0);
       this.entities[eid] = 0;
       this.aliveEids.remove(eid);
@@ -159,7 +157,7 @@ export class Sekai {
       // reserved entities are not recycled
       if (this.reservedEntities[eid] === 0) this.edoTensei.add(eid);
       // reset the entity's state to its default values
-      // this.resetEntityData(eid, prevMask);
+      this.resetEntityData(eid, prevMask);
    }
    // safety util
    validateEid(eid: EntityId) {
@@ -172,8 +170,9 @@ export class Sekai {
       return this.entities[eid] > 0;
    }
    resetEntityData(eid: EntityId, eidMask: number) {
-      const stores = Array.from(this.componentStoresMap.values());
+      const stores = this.componentStoresArray;
       for (const store of stores) {
+         if (store === undefined) continue;
          if ((eidMask & store.bitFlag) !== store.bitFlag) continue;
          store.resetEntity(eid);
       }
@@ -234,11 +233,11 @@ export class Sekai {
    ensureComponentBitFlag<TSchema extends ComponentSchema>(
       def: ComponentDefinition<TSchema>,
    ): number {
-      const registeredBitFlag = this.componentMasksMap.get(def);
-      if (registeredBitFlag) return registeredBitFlag;
+      const registeredBitFlag = this.componentMasksArray[def.id];
+      if (registeredBitFlag !== undefined) return registeredBitFlag;
 
       const bitFlag = this.getNewComponentBitFlag();
-      this.componentMasksMap.set(def, bitFlag);
+      this.componentMasksArray[def.id] = bitFlag;
       this.componentDefinitions.set(def.name, def);
       return bitFlag;
    }
@@ -282,8 +281,8 @@ export class Sekai {
       const newFlag = this.entityMask[eid] & ~componentBitFlag;
       // maybe reset component's data ?
       this.updateEntityMask(eid, newFlag);
-      // const store = this.componentStoresMap.get(componentDef);
-      // if (store) store.resetEntity(eid);
+      const store = this.componentStoresArray[componentDef.id];
+      if (store !== undefined) store.resetEntity(eid);
    }
    updateComponent<TSchema extends ComponentSchema>(
       eid: EntityId,
@@ -344,20 +343,20 @@ export class Sekai {
    createStore<TSchema extends ComponentSchema = ComponentSchema>(
       def: ComponentDefinition<TSchema>,
    ): SchemaToStore<TSchema> {
-      if (this.componentStoresMap.has(def)) {
+      if (this.componentStoresArray[def.id]) {
          throw new Error(`Store has been created for ${def.name}`);
       }
       const componentBitFlag = this.ensureComponentBitFlag(def);
 
       const store = new Store(def, componentBitFlag);
 
-      this.componentStoresMap.set(def, store as SchemaToStore<TSchema>);
+      this.componentStoresArray[def.id] = store;
       return store as SchemaToStore<TSchema>;
    }
    getStore<TSchema extends ComponentSchema = ComponentSchema>(
       def: ComponentDefinition<TSchema>,
    ) {
-      let store = this.componentStoresMap.get(def);
+      let store = this.componentStoresArray[def.id];
       if (!store) {
          store = this.createStore(def);
       }
