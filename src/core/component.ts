@@ -1,4 +1,4 @@
-import { MAX_ENTITIES } from "./constants";
+import { MAX_DEFINED, MAX_ENTITIES } from "./constants";
 import type { EntityId } from "./entity";
 
 export const Types = {
@@ -20,7 +20,10 @@ export type TypeKey = (typeof Types)[keyof typeof Types];
 export const globalDefinitions: Set<ComponentDefinition> = new Set();
 
 let idx = 1;
-const getNewId = () => idx++;
+const getNewId = () => {
+   if (MAX_DEFINED === idx) throw new Error("Max defined reached");
+   return idx++;
+};
 
 export class RefType<T = any> {
    values: Array<T>;
@@ -111,7 +114,7 @@ export interface ComponentDefinition<
    name: string;
    description: string;
    schema: TSchema;
-   id?: number;
+   id: number;
 }
 
 type TypedArrayType =
@@ -150,13 +153,15 @@ export type PartialComponentInstance<TSchema extends ComponentSchema> =
 
 export function defineComponent<
    TSchema extends ComponentSchema = ComponentSchema,
->(def: ComponentDefinition<TSchema>): ComponentDefinition<TSchema> {
+>(
+   defInput: Omit<ComponentDefinition<TSchema>, "id" | "bitFlag">,
+): ComponentDefinition<TSchema> {
+   const def = defInput as ComponentDefinition<TSchema>;
    if (def.id !== undefined && globalDefinitions.has(def)) {
       console.warn(` Defintion has been register ${def.name}`);
       return def;
    }
    globalDefinitions.add(def);
    def.id = getNewId();
-   // Object.freeze(def);
    return def;
 }
