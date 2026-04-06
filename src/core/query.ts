@@ -49,6 +49,7 @@ export class Query {
       this.archeTypes = arches;
    }
    get entities() {
+      // return this.entitiesSparset.dense; // dense array non-sorted
       if (this.needSort) this.sortResult();
       return this.sortedEntities;
    }
@@ -82,6 +83,7 @@ export class Query {
    sortResult() {
       const dense = this.entitiesSparset.dense;
       const count = this.entitiesSparset.count;
+      this.sortedEntities.length = count;
       for (let i = 0; i < count; i++) {
          this.sortedEntities[i] = dense[i];
       }
