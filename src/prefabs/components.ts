@@ -68,12 +68,13 @@ export const Material = defineComponent({
    name: "Material",
    description: "PBR Material properties and asset references",
    schema: {
-      materialId: Types.u32,
+      materialId: Types.u8,
       color: Types.u32, // 0xRRGGBBAA
       roughness: Types.f32,
       metalness: Types.f32,
       opacity: Types.f32,
-      blending: Types.u8, // Enum: 0=None, 1=Alpha, 2=Additive
+      transparent: Types.bool,
+      // blending: Types.u8, // Enum: 0=None, 1=Alpha, 2=Additive
    },
 });
 
@@ -83,8 +84,6 @@ export const Geometry = defineComponent({
    description: "Buffer references for mesh data",
    schema: {
       type: Types.u8, // Enum: 0=Box, 1=Sphere, 2=Plane, 3=Custom
-      bufferId: Types.u32, // ID for GPU buffers
-      isDynamic: Types.bool,
    },
 });
 

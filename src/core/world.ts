@@ -363,10 +363,13 @@ export class Sekai {
       return store as SchemaToStore<TSchema>;
    }
 
-   addSystem(systemClass: new () => System) {
+   addSystem(
+      systemClass: new (...args: any[]) => System,
+      creator: () => System,
+   ) {
       if (this.systemsMap.has(systemClass)) return;
 
-      const system = new systemClass();
+      const system = creator();
 
       this.systemsMap.set(systemClass, system);
       this.systemsInstances.push(system);
