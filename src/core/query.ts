@@ -9,6 +9,12 @@ export interface QueryTerm {
    any?: ComponentDefinition[];
    none?: ComponentDefinition[];
 }
+export interface QueryTracker {
+   entered: EntityId[];
+   exited: EntityId[];
+   unTrack: () => void;
+   clear: () => void;
+}
 
 export class Query {
    allMask: number;
@@ -20,9 +26,10 @@ export class Query {
    updated: boolean;
    sortedEntities: EntityId[];
    needSort: boolean;
-
    archeTypes: ArcheType[];
-   archeMaskSet: Set<number>; //replaced sparset wit native Set
+   archeMaskSet: Set<number>;
+
+   trackers: QueryTracker[];
    constructor(
       {
          allMask,
@@ -47,11 +54,15 @@ export class Query {
       this.archeMaskSet = new Set();
       this.interestMask = allMask | anyMask | noneMask;
       this.archeTypes = arches;
+
+      this.trackers = [];
    }
    get entities() {
-      // return this.entitiesSparset.dense; // dense array non-sorted
-      if (this.needSort) this.sortResult();
-      return this.sortedEntities;
+      return this.entitiesSparset.dense;
+
+      // this seems to be a bottle neck , ops/s rate drop when i use the sorting logic
+      // if (this.needSort) this.sortResult();
+      // return this.sortedEntities;
    }
    match(entityMask: number): boolean {
       const hasAny = this.anyMask > 0;
@@ -72,14 +83,27 @@ export class Query {
 
       this.updated = true;
 
-      if (isMatch) this.entitiesSparset.add(eid);
-      else this.entitiesSparset.remove(eid);
+      if (isMatch) {
+         this.entitiesSparset.add(eid);
+         for (let i = 0; i < this.trackers.length; i++) {
+            this.trackers[i].entered.push(eid);
+         }
+      } else {
+         this.entitiesSparset.remove(eid);
+         for (let i = 0; i < this.trackers.length; i++) {
+            this.trackers[i].exited.push(eid);
+         }
+      }
       this.needSort = true;
    }
    resetUpdated() {
       this.updated = false;
+      const trackers = this.trackers;
+      for (let i = 0; i < trackers.length; i++) {
+         trackers[i].entered.length = 0;
+         trackers[i].exited.length = 0;
+      }
    }
-   // this sort feature needs cleaner ac=rchitecture , maybe sort in sparseset ?
    sortResult() {
       const dense = this.entitiesSparset.dense;
       const count = this.entitiesSparset.count;
@@ -89,5 +113,35 @@ export class Query {
       }
       this.sortedEntities.sort((a, b) => a - b);
       this.needSort = false;
+   }
+   track(): QueryTracker {
+      const entered: number[] = [];
+      const exited: number[] = [];
+      const eids = this.entities;
+
+      const tracker: QueryTracker = {
+         entered,
+         exited,
+         clear: () => {
+            entered.length = 0;
+            exited.length = 0;
+         },
+         unTrack: () => {
+            const idx = this.trackers.indexOf(tracker);
+            entered.length = 0;
+            exited.length = 0;
+            if (idx !== -1) {
+               this.trackers.splice(idx, 1);
+            }
+         },
+      };
+
+      // seed
+      for (let i = 0; i < eids.length; i++) {
+         tracker.entered.push(eids[i]);
+      }
+
+      this.trackers.push(tracker);
+      return tracker;
    }
 }
