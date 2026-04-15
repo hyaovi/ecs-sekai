@@ -16,4 +16,10 @@ export {
 } from "./components";
 export { type Prefab, definePrefab } from "./prefab-builder";
 
-export { EmptyObjectPrefab, PrimitiveObjectPrefab } from "./prefabs-objects";
+export {
+   EmptyObjectPrefab,
+   PrimitiveObjectPrefab,
+   LightPrefab,
+   AmbientLightPrefab,
+   BoxPrefab,
+} from "./prefabs-objects";
