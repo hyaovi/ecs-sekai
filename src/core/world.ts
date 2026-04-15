@@ -243,6 +243,11 @@ export class Sekai {
       this.componentDefinitions.set(def.name, def);
       return bitFlag;
    }
+   registerComponents(...componentDefinitions: ComponentDefinition[]) {
+      for (const definition of componentDefinitions) {
+         this.ensureComponentBitFlag(definition);
+      }
+   }
    addComponent<TSchema extends ComponentSchema>(
       eid: EntityId,
       componentDef: ComponentDefinition<TSchema>,
