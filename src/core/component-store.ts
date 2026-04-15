@@ -9,7 +9,7 @@ import { MAX_ENTITIES } from "./constants";
 import type { EntityId } from "./entity";
 
 export class Store<TSchema extends ComponentSchema = ComponentSchema> {
-   isDirty: Uint8Array;
+   changedTick: Uint32Array;
    readonly bitFlag: number;
    definition: ComponentDefinition<TSchema>;
    [key: string]: any; // this is for fields
@@ -17,7 +17,7 @@ export class Store<TSchema extends ComponentSchema = ComponentSchema> {
    constructor(def: ComponentDefinition<TSchema>, bitFlag: number) {
       this.bitFlag = bitFlag;
       this.definition = def;
-      this.isDirty = new Uint8Array(MAX_ENTITIES);
+      this.changedTick = new Uint32Array(MAX_ENTITIES);
       this.createFields();
    }
    private createFields() {
@@ -52,7 +52,7 @@ export class Store<TSchema extends ComponentSchema = ComponentSchema> {
             (field as Uint32Array).fill(0);
          }
       }
-      this.isDirty.fill(0);
+      this.changedTick.fill(0);
    }
    resetEntity(eid: EntityId) {
       const kv = Object.entries(this.definition.schema);
@@ -65,7 +65,7 @@ export class Store<TSchema extends ComponentSchema = ComponentSchema> {
             field[eid] = 0;
          }
       }
-      this.isDirty[eid] = 0;
+      this.changedTick[eid] = 0;
    }
 }
 

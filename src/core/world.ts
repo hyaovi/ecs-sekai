@@ -39,6 +39,7 @@ export class Sekai {
    archeTypeMap: Map<number, ArcheType>;
 
    rebuildSystems: boolean;
+   frame: number;
 
    // runtime flag
 
@@ -70,6 +71,7 @@ export class Sekai {
       this.deferring = false;
 
       this.deferredOps = [];
+      this.frame = 0;
    }
    reset() {
       this.queries.length = 0;
@@ -325,7 +327,7 @@ export class Sekai {
          } else {
             (store[key] as Uint32Array)[eid] = value as number;
          }
-         store.isDirty[eid] = 1;
+         store.changedTick[eid] = this.frame;
       }
    }
    hasComponent(eid: EntityId, definition: ComponentDefinition): boolean {
@@ -488,6 +490,7 @@ export class Sekai {
    }
 
    tick(dt: number) {
+      this.frame++;
       if (this.rebuildSystems) this.buildSystemRunners();
       const runners = this.systemsRunners;
 
