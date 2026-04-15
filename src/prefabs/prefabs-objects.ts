@@ -1,16 +1,25 @@
 import {
    Geometry,
    GeometryType,
+   Hierarchy,
    Light,
    LightType,
    Material,
    Meta,
+   Renderable,
    Transform,
 } from "./components";
 import { definePrefab } from "./prefab-builder";
 
-export const EmptyObjectPrefab = definePrefab("emtpy", "An empty object")
-   .add(Transform)
+export const EmptyObjectPrefab = definePrefab("empty", "An empty object")
+   .add(Transform, { sx: 1, sy: 1, sz: 1 })
+   .add(Hierarchy)
+   .add(Renderable, {
+      visible: true,
+      castShadows: true,
+      receiveShadows: true,
+      frustumCulled: true,
+   })
    .add(Meta, { name: "empty" })
    .build();
 
@@ -21,7 +30,7 @@ export const PrimitiveObjectPrefab = definePrefab(
    .extendsWith(EmptyObjectPrefab)
    .add(Geometry, { type: GeometryType.Sphere })
    .add(Material, { color: 0xcccccc })
-   .add(Meta, { name: "Primitive" })
+   .add(Meta, { name: "Primitive", active: true })
    .build();
 
 export const LightPrefab = definePrefab("light", "Light object")

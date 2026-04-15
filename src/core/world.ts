@@ -327,8 +327,8 @@ export class Sekai {
          } else {
             (store[key] as Uint32Array)[eid] = value as number;
          }
-         store.changedTick[eid] = this.frame;
       }
+      store.changedTick[eid] = this.frame;
    }
    hasComponent(eid: EntityId, definition: ComponentDefinition): boolean {
       if (this.entities[eid] === 0) return false;
