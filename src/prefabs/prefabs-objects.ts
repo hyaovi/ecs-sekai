@@ -29,13 +29,19 @@ export const PrimitiveObjectPrefab = definePrefab(
 )
    .extendsWith(EmptyObjectPrefab)
    .add(Geometry, { type: GeometryType.Sphere })
-   .add(Material, { color: 0xcccccc })
+   .add(Material, { color: 0xcccccc, roughness: 0.2, metalness: 0.1 })
    .add(Meta, { name: "Primitive", active: true })
    .build();
 
 export const LightPrefab = definePrefab("light", "Light object")
    .extendsWith(EmptyObjectPrefab)
-   .add(Light, { type: LightType.Directional, intensity: 1, color: 0xffffff })
+   .add(Light, {
+      type: LightType.Directional,
+      intensity: 1,
+      color: 0xffffff,
+      shadow: false,
+   })
+   .add(Transform, { x: 5, y: 5, z: 0 })
    .build();
 export const AmbientLightPrefab = definePrefab("ambient", "Light object")
    .extendsWith(EmptyObjectPrefab)
