@@ -92,6 +92,13 @@ export class Sekai {
       for (const store of this.componentStoresArray) {
          if (store !== undefined) store.reset();
       }
+
+      for (let i = 0; i < this.systemsInstances.length; i++) {
+         this.systemsInstances[i]._runner = undefined;
+      }
+
+      this.endTickCallbacks.length = 0;
+      this.frame = 0;
    }
 
    createEntity(): EntityId {
