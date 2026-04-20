@@ -39,7 +39,7 @@ export const LightPrefab = definePrefab("light", "Light object")
       type: LightType.Directional,
       intensity: 1,
       color: 0xffffff,
-      shadow: false,
+      shadow: true,
    })
    .add(Transform, { x: 5, y: 5, z: 0 })
    .build();
