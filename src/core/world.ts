@@ -40,6 +40,7 @@ export class Sekai {
 
    rebuildSystems: boolean;
    frame: number;
+   endTickCallbacks: (() => void)[];
 
    // runtime flag
 
@@ -72,6 +73,7 @@ export class Sekai {
 
       this.deferredOps = [];
       this.frame = 0;
+      this.endTickCallbacks = [];
    }
    reset() {
       this.queries.length = 0;
@@ -511,5 +513,18 @@ export class Sekai {
       for (let i = 0; i < queries.length; i++) {
          queries[i].resetUpdated();
       }
+
+      // flush end tick callbacks
+      const cbs = this.endTickCallbacks;
+      const cbCount = cbs.length;
+      if (cbCount > 0) {
+         this.endTickCallbacks = [];
+         for (let i = 0; i < cbCount; i++) {
+            cbs[i]();
+         }
+      }
+   }
+   onEndTick(cb: () => void) {
+      this.endTickCallbacks.push(cb);
    }
 }
