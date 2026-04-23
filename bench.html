@@ -6,28 +6,125 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Sekai-ECS</title>
    </head>
-
    <body>
       <div id="app">
          <h1>dev console</h1>
          <button id="start">start</button>
+         <span id="status"></span>
+         <div id="results"></div>
+         <pre id="log"></pre>
       </div>
+
       <script type="module">
          const btn = document.querySelector("#start");
-         btn.addEventListener("click", async () => {
-            console.log("@ sr");
+         const statusEl = document.querySelector("#status");
+         const resultsEl = document.querySelector("#results");
+         const logEl = document.querySelector("#log");
+
+         const origLog = console.log.bind(console);
+         const origTable = console.table.bind(console);
+         const origError = console.error.bind(console);
+
+         let pendingSectionTitle = null;
+         const sectionRegex = /━━━\s*(.+?)\s*━━━/;
+
+         function appendLog(text) {
+            logEl.textContent += text + "\n";
+         }
+
+         console.log = (...args) => {
+            origLog(...args);
+            const text = args
+               .map((a) => (typeof a === "string" ? a : safeStringify(a)))
+               .join(" ");
+            const m = text.match(sectionRegex);
+            if (m) pendingSectionTitle = m[1];
+            appendLog(text);
+         };
+
+         console.error = (...args) => {
+            origError(...args);
+            const text = args
+               .map((a) =>
+                  a instanceof Error
+                     ? `${a.name}: ${a.message}\n${a.stack ?? ""}`
+                     : typeof a === "string"
+                       ? a
+                       : safeStringify(a),
+               )
+               .join(" ");
+            appendLog("ERROR: " + text);
+         };
+
+         console.table = (data) => {
+            origTable(data);
+            renderTable(data);
+         };
+
+         function safeStringify(v) {
             try {
-               await import("./src/benchmarks/bench.ts");
+               return JSON.stringify(v);
+            } catch {
+               return String(v);
+            }
+         }
+
+         function renderTable(data) {
+            if (!Array.isArray(data) || data.length === 0) return;
+            const headers = Object.keys(data[0] ?? {});
+            if (headers.length === 0) return;
+
+            if (pendingSectionTitle) {
+               const h2 = document.createElement("h2");
+               h2.textContent = pendingSectionTitle;
+               resultsEl.appendChild(h2);
+               pendingSectionTitle = null;
+            }
+
+            const table = document.createElement("table");
+            table.border = "1";
+
+            const thead = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            for (const h of headers) {
+               const th = document.createElement("th");
+               th.textContent = h;
+               headRow.appendChild(th);
+            }
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement("tbody");
+            for (const row of data) {
+               const tr = document.createElement("tr");
+               for (const h of headers) {
+                  const td = document.createElement("td");
+                  const v = row[h];
+                  td.textContent = v === null || v === undefined ? "" : String(v);
+                  tr.appendChild(td);
+               }
+               tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            resultsEl.appendChild(table);
+         }
+
+         btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            statusEl.textContent = " running...";
+            resultsEl.innerHTML = "";
+            logEl.textContent = "";
+
+            try {
+               await import(`./src/benchmarks/bench.ts`);
+               statusEl.textContent = " done";
             } catch (error) {
                console.error(error);
+               statusEl.textContent = " failed";
+            } finally {
+               btn.disabled = false;
             }
          });
       </script>
    </body>
-   <style>
-      html,
-      body {
-         font-family: "Inter", sans-serif;
-      }
-   </style>
 </html>
