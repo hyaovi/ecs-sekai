@@ -25,6 +25,7 @@
    },
    "homepage": "https://github.com/hyaovi/sekai-seisei#readme",
    "devDependencies": {
+      "@types/node": "^25.6.0",
       "bitecs": "^0.4.0",
       "tinybench": "^6.0.0",
       "tsx": "^4.21.0",

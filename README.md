@@ -1,101 +1,42 @@
 # Sekai ECS
 
-A class-based Entity Component System framework for game development and 3D project editing.
+A TypeScript Entity Component System benchmarked against [bitECS](https://github.com/NateTheGreatt/bitECS), one of the fastest ECS libraries available for JavaScript. Built as a research project to explore how far browser performance can be pushed through archetype-based storage, typed-array layout, and JIT-friendly access patterns.
 
-## Description
+## Benchmarks
 
-Sekai is a TypeScript-based Entity Component System (ECS) framework designed for game development and 3D project editing. It features a headless editor architecture that can be used as a backend for various frontends.
+Sekai is competitive with bitECS across the workloads tested, with measurable wins on query iteration and fragmented archetype scenarios. Full methodology and per-task numbers are in [`benchmarks/latest-results.md`](./benchmarks/latest-results.md). Reproducible via the scripts below.
 
-## Features
+| Workload | Sekai | bitECS | Notes |
+|----------|-------|--------|-------|
+| _TODO: fill from latest-results.md after a clean run_ |  |  | |
 
-- **Core ECS Architecture**: Entity-Component-System pattern with bitmask-based archetype system
-- **Headless Editor**: Command pattern for undo/redo, history management, and inspector
-- **Asset Management**: Handle-based asset storage with UUID lookup
-- **Hierarchy Management**: Parent-child relationships and scene graph management
-- **Event System**: DenDenStation event bus for notifications
-- **Serialization**: Save and load project state
+Where bitECS wins, it's called out explicitly in the results file rather than hidden. The goal here is to understand the performance space, not to claim a blanket win.
 
-## Project Structure
-
-```
-src/ecs/
-  index.ts                        # Top-level barrel: re-exports all sub-barrels
-
-  core/                           # Core ECS runtime
-    index.ts
-    world.ts                      # Sekai class - main ECS world
-    entity.ts                     # EntityId type, NULL_ENTITY
-    component.ts                  # Types, RefType, defineComponent, ComponentDefinition
-    component-store.ts            # Store class (typed-array backed)
-    archetype.ts                  # ArcheType class (bitmask-based grouping)
-    query.ts                      # Query, QueryTerm
-    system.ts                     # System base class, PhaseTypes
-    constants.ts                  # MAX_ENTITIES, MAX_COMPONENTS
-    types.ts                      # TickFunction
-    deferred.ts                   # DeferredOpType, DeferredOp (deferred operations during tick)
-    serialization.ts              # captureWorldSnapshot, restoreWorldSnapshot, EntityData
-    world.test.ts                 # Core ECS tests
-
-  structures/                     # Reusable data structures
-    index.ts
-    sparse-set.ts                 # SparseSet
-    tracker.ts                    # SyncTracker, Tracker
-
-  events/                         # Event system
-    index.ts
-    event-bus.ts                  # DenDenMushi (signal), DenDenStation (hub) - generic
-    editor-events.ts              # EditorEvents interface + payload types
-
-  prefabs/                        # Predefined components and prefab builder
-    index.ts
-    components.ts                 # Transform, Meta, Material, Geometry, Renderable, etc.
-    prefab-builder.ts             # PrefabBuilder, definePrefab
-
-  editor/                         # Headless editor layer
-    index.ts
-    editor.ts                     # EditorAPI facade
-    commands.ts                   # Command type definitions (entity, component, asset, batch)
-    command-executor.ts           # Execute/undo/redo command handling
-    inspector.ts                  # EditorInspector (entity inspection)
-    history.ts                    # History stack (undo/redo)
-    asset-manager.ts              # AssetRegistery (handle-based storage)
-    hierarchy-helper.ts           # HierarchyHelper (parent-child, tree building)
-    validation.ts                 # validateComponentDefinition
-
-  utils/                          # Browser utilities
-    index.ts
-    download.ts                   # downloadJSON
-
-  benchmarks/                     # Performance benchmarks
-    bench.ts                      # tinybench comparisons (Sekai vs bitECS)
-    benchmark.ts                  # Simple benchmark harness
-```
-
-### Dependency Layers
-
-All dependencies point downward - no circular imports.
-
-```
-L0 (leaf):  constants, types, entity
-L1:         component, sparse-set, tracker
-L2:         component-store, archetype, event-bus
-L3:         query, system, deferred
-L4:         world, serialization
-L5:         editor-events, prefabs, prefab-builder
-L6:         inspector, history, asset-manager, validation
-L7:         commands, hierarchy-helper
-L8:         command-executor
-L9:         editor (facade)
-```
-
-## Development
+### Run the benchmarks
 
 ```bash
-pnpm run dev     # Start dev server
-pnpm run build   # Type-check + production build
-pnpm run test    # Run tests (vitest)
+pnpm install
+pnpm run bench            # Node benchmarks via tinybench, writes ./benchmarks/latest-results.md
+pnpm run bench:browser    # Same benchmarks in the browser; open devtools to see results
 ```
 
-## Status
+The browser run loads `bench.ts` via `bench.html` and streams results to the browser devtools console. For a rendered markdown version, use the Node run and read `benchmarks/latest-results.md`.
 
-Work in Progress - this project is actively being developed.
+## Design
+
+- **Bitmask archetype system** — entities grouped by component signature, queries resolve to O(archetypes) not O(entities).
+- **Typed-array component stores** — contiguous memory, cache-friendly iteration.
+- **Cached queries** — query definitions resolve once, entity sets update incrementally on structural change.
+- **Deferred operations** — safe mutation during iteration without copying the entity set.
+
+## Scripts
+
+```bash
+pnpm run test             # Vitest test suite
+pnpm run bench            # Node benchmarks (tinybench), writes markdown report
+pnpm run bench:browser    # Browser benchmarks (Vite), console output
+```
+
+## Notes
+
+Research project focused on performance exploration. API is subject to change. bitECS version used for comparison is pinned in `package.json` and recorded in each `latest-results.md` run.
