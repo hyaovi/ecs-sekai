@@ -20,11 +20,16 @@ import {
    restoreWorldSnapshot,
 } from "../core/serialization";
 
-// declare const process: { version: string; platform: string; arch: string };
+// ─── Environment detection ──────────────────────────────────────────────────
+const IS_NODE =
+   typeof process !== "undefined" &&
+   process.versions != null &&
+   process.versions.node != null;
 
 // ─── Shared Config ──────────────────────────────────────────────────────────
 const BENCH_TIME = 1000;
 const WARMUP_TIME = 200;
+const OUTPUT_PATH = "./benchmarks/latest-results.md";
 
 function benchDefaults(name: string) {
    return new Bench({ name, time: BENCH_TIME, warmupTime: WARMUP_TIME });
@@ -49,7 +54,16 @@ const Health = defineComponent({
    schema: { hp: Types.f32, maxHp: Types.f32 },
 });
 
-// ─── Result printer ─────────────────────────────────────────────────────────
+// ─── Result collection ──────────────────────────────────────────────────────
+interface BenchSection {
+   name: string;
+   notes?: string;
+   bench: Bench;
+}
+
+const sections: BenchSection[] = [];
+
+// ─── Result printer (console) ───────────────────────────────────────────────
 function printResults(bench: Bench) {
    console.log(`\n━━━ ${bench.name} ━━━`);
    console.table(bench.table());
@@ -61,7 +75,7 @@ function printResults(bench: Bench) {
       const opsPerSec = r.throughput.mean;
       const rme = r.latency.rme;
       console.log(
-         `  ${task.name.padEnd(55)} ${formatNumber(opsPerSec)} ops/s  ` +
+         `  ${task.name.padEnd(60)} ${formatNumber(opsPerSec)} ops/s  ` +
             `avg=${r.latency.mean.toFixed(4)}ms  ` +
             `samples=${r.latency.samplesCount}  ` +
             `RME=±${rme.toFixed(2)}%`,
@@ -75,16 +89,119 @@ function formatNumber(n: number): string {
    return n.toFixed(2);
 }
 
+// ─── Markdown writer (Node only) ────────────────────────────────────────────
+function buildMarkdown(
+   sections: BenchSection[],
+   env: { node: string; platform: string; cpu: string; cores: number; memGB: string },
+): string {
+   const lines: string[] = [];
+
+   lines.push(`# Sekai ECS — Benchmark Results`);
+   lines.push("");
+   lines.push(`_Generated ${new Date().toISOString()}_`);
+   lines.push("");
+   lines.push(`## Environment`);
+   lines.push("");
+   lines.push(`| Field | Value |`);
+   lines.push(`| --- | --- |`);
+   lines.push(`| Node | ${env.node} |`);
+   lines.push(`| Platform | ${env.platform} |`);
+   lines.push(`| CPU | ${env.cpu} (${env.cores} cores) |`);
+   lines.push(`| Memory | ${env.memGB} GB |`);
+   lines.push(`| Bench time | ${BENCH_TIME}ms per task |`);
+   lines.push(`| Warmup | ${WARMUP_TIME}ms per task |`);
+   lines.push("");
+
+   lines.push(`## Methodology notes`);
+   lines.push("");
+   lines.push(
+      `- Each task runs for ${BENCH_TIME}ms after a ${WARMUP_TIME}ms warmup.`,
+   );
+   lines.push(
+      `- Numbers are reported as ops/sec (higher = better) and latency (lower = better).`,
+   );
+   lines.push(
+      `- Sekai and bitECS are compared on equivalent workloads where the APIs align. Some Sekai features (deferred ops, serialization, tick pipeline) have no direct bitECS equivalent and are reported separately.`,
+   );
+   lines.push(
+      `- Sekai's tick pipeline includes phase dispatch and deferred-op flushing; the bitECS comparison calls a plain function loop. They are not apples-to-apples and are labeled as such.`,
+   );
+   lines.push("");
+
+   for (const section of sections) {
+      lines.push(`## ${section.name}`);
+      lines.push("");
+      if (section.notes) {
+         lines.push(`_${section.notes}_`);
+         lines.push("");
+      }
+
+      const rows = section.bench.table();
+      if (!rows || rows.length === 0) {
+         lines.push(`_No results collected._`);
+         lines.push("");
+         continue;
+      }
+
+      const headers = Object.keys(rows[0] ?? {});
+      lines.push(`| ${headers.join(" | ")} |`);
+      lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
+      for (const row of rows) {
+         const cells = headers.map((h) => {
+            const v = (row as Record<string, unknown>)[h];
+            if (v === null || v === undefined) return "";
+            return String(v).replace(/\|/g, "\\|");
+         });
+         lines.push(`| ${cells.join(" | ")} |`);
+      }
+      lines.push("");
+   }
+
+   lines.push(`---`);
+   lines.push(
+      `_Reproduce locally with \`pnpm run bench\`. See \`src/benchmarks/bench.ts\` for workload definitions._`,
+   );
+   lines.push("");
+
+   return lines.join("\n");
+}
+
+async function writeMarkdownNodeOnly(sections: BenchSection[]) {
+   if (!IS_NODE) return;
+
+   // Dynamic imports so bundlers (Vite in the browser) don't try to resolve
+   // these when building for the browser.
+   const [{ writeFileSync, mkdirSync }, { dirname }, os] = await Promise.all([
+      import("node:fs"),
+      import("node:path"),
+      import("node:os"),
+   ]);
+
+   const env = {
+      node: process.version,
+      platform: `${process.platform} ${process.arch}`,
+      cpu: os.cpus()[0]?.model ?? "unknown",
+      cores: os.cpus().length,
+      memGB: (os.totalmem() / 1024 / 1024 / 1024).toFixed(1),
+   };
+
+   const md = buildMarkdown(sections, env);
+   try {
+      mkdirSync(dirname(OUTPUT_PATH), { recursive: true });
+   } catch {
+      // ignore
+   }
+   writeFileSync(OUTPUT_PATH, md, "utf8");
+   console.log(`\n✓ Markdown written to ${OUTPUT_PATH}`);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GROUP 1: Entity Lifecycle
 // ═══════════════════════════════════════════════════════════════════════════════
 async function runEntityLifecycle() {
    const bench = benchDefaults("Entity Lifecycle");
 
-   // --- Sekai setup ---
    const worldS = new Sekai();
-
-   // --- bitECS setup ---
    const bitWorld = createWorld();
 
    bench
@@ -96,33 +213,33 @@ async function runEntityLifecycle() {
          const eid = addEntity(bitWorld);
          removeEntity(bitWorld, eid);
       })
-      .add("Sekai: bulk create 10k entities", () => {
+      .add("Sekai: bulk create 10k entities (incl. world init)", () => {
          const w = new Sekai();
          for (let i = 0; i < 10_000; i++) w.createEntity();
       })
-      .add("bitECS: bulk create 10k entities", () => {
+      .add("bitECS: bulk create 10k entities (incl. world init)", () => {
          const w = createWorld();
          for (let i = 0; i < 10_000; i++) addEntity(w);
       })
-      .add("Sekai: bulk destroy 10k entities", () => {
+      .add("Sekai: bulk destroy 10k entities (incl. world init)", () => {
          const w = new Sekai();
          const eids: number[] = [];
          for (let i = 0; i < 10_000; i++) eids.push(w.createEntity());
          for (let i = 0; i < 10_000; i++) w.destructEntity(eids[i]);
       })
-      .add("bitECS: bulk destroy 10k entities", () => {
+      .add("bitECS: bulk destroy 10k entities (incl. world init)", () => {
          const w = createWorld();
          const eids: number[] = [];
          for (let i = 0; i < 10_000; i++) eids.push(addEntity(w));
          for (let i = 0; i < 10_000; i++) removeEntity(w, eids[i]);
       })
-      .add("Sekai: entity recycling (create/destroy/create)", () => {
+      .add("Sekai: entity recycling (2x create/destroy)", () => {
          const eid1 = worldS.createEntity();
          worldS.destructEntity(eid1);
          const _eid2 = worldS.createEntity();
          worldS.destructEntity(_eid2);
       })
-      .add("bitECS: entity recycling (create/destroy/create)", () => {
+      .add("bitECS: entity recycling (2x create/destroy)", () => {
          const eid1 = addEntity(bitWorld);
          removeEntity(bitWorld, eid1);
          const _eid2 = addEntity(bitWorld);
@@ -131,6 +248,12 @@ async function runEntityLifecycle() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Entity Lifecycle",
+      notes:
+         "Bulk tests include world construction per iteration (end-to-end bootstrap cost).",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,13 +262,11 @@ async function runEntityLifecycle() {
 async function runComponentOps() {
    const bench = benchDefaults("Component Operations");
 
-   // --- Sekai setup ---
    const worldS = new Sekai();
    worldS.ensureComponentBitFlag(Position);
    worldS.ensureComponentBitFlag(Velocity);
    worldS.ensureComponentBitFlag(Health);
 
-   // --- bitECS setup ---
    const bitWorld = createWorld({
       components: {
          Pos: { x: new Float32Array(50001), y: new Float32Array(50001) },
@@ -155,20 +276,19 @@ async function runComponentOps() {
    });
    const { Pos, Vel, Hp } = bitWorld.components;
 
-   // Pre-create entities for reuse
    let sEid = worldS.createEntity();
    let bEid = addEntity(bitWorld);
 
    bench
-      .add("Sekai: addComponent (single)", () => {
+      .add("Sekai: add + remove 1 component (pair)", () => {
          worldS.addComponent(sEid, Position);
          worldS.removeComponent(sEid, Position);
       })
-      .add("bitECS: addComponent (single)", () => {
+      .add("bitECS: add + remove 1 component (pair)", () => {
          addComponent(bitWorld, bEid, Pos);
          removeComponent(bitWorld, bEid, Pos);
       })
-      .add("Sekai: add 3 components", () => {
+      .add("Sekai: add + remove 3 components (pair)", () => {
          worldS.addComponent(sEid, Position);
          worldS.addComponent(sEid, Velocity);
          worldS.addComponent(sEid, Health);
@@ -176,7 +296,7 @@ async function runComponentOps() {
          worldS.removeComponent(sEid, Velocity);
          worldS.removeComponent(sEid, Health);
       })
-      .add("bitECS: add 3 components", () => {
+      .add("bitECS: add + remove 3 components (pair)", () => {
          addComponent(bitWorld, bEid, Pos);
          addComponent(bitWorld, bEid, Vel);
          addComponent(bitWorld, bEid, Hp);
@@ -184,29 +304,23 @@ async function runComponentOps() {
          removeComponent(bitWorld, bEid, Vel);
          removeComponent(bitWorld, bEid, Hp);
       })
-      .add("Sekai: removeComponent", () => {
-         worldS.addComponent(sEid, Position);
-         worldS.removeComponent(sEid, Position);
-      })
-      .add("bitECS: removeComponent", () => {
-         addComponent(bitWorld, bEid, Pos);
-         removeComponent(bitWorld, bEid, Pos);
-      })
-      .add("Sekai: updateComponent (partial)", () => {
+      .add("Sekai: updateComponent (partial) [Sekai-only]", () => {
          worldS.addComponent(sEid, Position);
          worldS.updateComponent(sEid, Position, { x: 10 });
          worldS.removeComponent(sEid, Position);
       })
       .add("Sekai: hasComponent check", () => {
          worldS.hasComponent(sEid, Position);
-      })
-      .add("bitECS: hasComponent check (bitmask)", () => {
-         // bitECS v0.4: check via query or manual bitmask; use addComponent idempotency
-         void Pos.x[bEid];
       });
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Component Operations",
+      notes:
+         "Add and remove are measured as pairs (symmetric setup/teardown per iteration). `updateComponent` and `hasComponent` are Sekai-only API shapes; no direct equivalent in bitECS (which exposes raw typed-array access instead).",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -216,7 +330,6 @@ async function runQueryPerf() {
    const bench = benchDefaults("Query Performance");
    const ENTITY_COUNT = 10_000;
 
-   // --- Sekai setup ---
    const worldS = new Sekai();
    worldS.ensureComponentBitFlag(Position);
    worldS.ensureComponentBitFlag(Velocity);
@@ -228,10 +341,8 @@ async function runQueryPerf() {
       worldS.addComponent(eid, Velocity);
    }
    const sekaiQuery = worldS.defineQuery({ all: [Position, Velocity] });
-   // Force initial computation
    void sekaiQuery.entities;
 
-   // --- bitECS setup ---
    const bitWorld = createWorld({
       components: {
          Pos: {
@@ -265,7 +376,7 @@ async function runQueryPerf() {
          for (let i = 0; i < ents.length; i++) sum += ents[i];
       });
 
-   // Mixed archetypes: add Health to half entities → 2 archetypes
+   // Mixed archetypes
    const worldM = new Sekai();
    worldM.ensureComponentBitFlag(Position);
    worldM.ensureComponentBitFlag(Velocity);
@@ -341,6 +452,12 @@ async function runQueryPerf() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Query Performance",
+      notes:
+         "Mixed archetype tests populate 2 archetypes to force archetype-fan-out on Sekai's query. `defineQuery (cached hit)` measures cache lookup cost vs. bitECS's `query()` which re-executes on every call.",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -350,7 +467,6 @@ async function runSystemTick() {
    const bench = benchDefaults("System Tick");
    const ENTITY_COUNT = 10_000;
 
-   // --- Sekai: 1 system ---
    const worldS1 = new Sekai();
    for (let i = 0; i < ENTITY_COUNT; i++) {
       const eid = worldS1.createEntity();
@@ -380,11 +496,9 @@ async function runSystemTick() {
       init() {}
       destroy() {}
    }
-   worldS1.addSystem(MoveSystem);
-   // Warm up runner build
+   worldS1.addSystem(MoveSystem, () => new MoveSystem());
    worldS1.tick(16);
 
-   // --- bitECS: 1 system ---
    const bitWorld1 = createWorld({
       components: {
          Pos: {
@@ -415,14 +529,13 @@ async function runSystemTick() {
    };
 
    bench
-      .add("Sekai: tick 1 system (10k entities)", () => {
+      .add("Sekai: tick 1 system [full pipeline, 10k]", () => {
          worldS1.tick(16);
       })
-      .add("bitECS: tick 1 system (10k entities)", () => {
+      .add("bitECS: plain function loop [no pipeline, 10k]", () => {
          bitMoveSystem();
       });
 
-   // --- Sekai: 5 systems ---
    const worldS5 = new Sekai();
    for (let i = 0; i < ENTITY_COUNT; i++) {
       const eid = worldS5.createEntity();
@@ -436,9 +549,7 @@ async function runSystemTick() {
       readonly name = "Noop1";
       createRunner(world: Sekai) {
          const q = world.defineQuery({ all: [Position] });
-         return () => {
-            void q.entities.length;
-         };
+         return () => { void q.entities.length; };
       }
       init() {}
       destroy() {}
@@ -449,9 +560,7 @@ async function runSystemTick() {
       readonly name = "Noop2";
       createRunner(world: Sekai) {
          const q = world.defineQuery({ all: [Velocity] });
-         return () => {
-            void q.entities.length;
-         };
+         return () => { void q.entities.length; };
       }
       init() {}
       destroy() {}
@@ -462,9 +571,7 @@ async function runSystemTick() {
       readonly name = "Noop3";
       createRunner(world: Sekai) {
          const q = world.defineQuery({ all: [Position, Velocity] });
-         return () => {
-            void q.entities.length;
-         };
+         return () => { void q.entities.length; };
       }
       init() {}
       destroy() {}
@@ -475,30 +582,26 @@ async function runSystemTick() {
       readonly name = "Noop4";
       createRunner(world: Sekai) {
          const q = world.defineQuery({ all: [Position] });
-         return () => {
-            void q.entities.length;
-         };
+         return () => { void q.entities.length; };
       }
       init() {}
       destroy() {}
    }
 
-   worldS5.addSystem(MoveSystem);
-   worldS5.addSystem(NoopSystem1);
-   worldS5.addSystem(NoopSystem2);
-   worldS5.addSystem(NoopSystem3);
-   worldS5.addSystem(NoopSystem4);
-   worldS5.tick(16); // warm up
+   worldS5.addSystem(MoveSystem, () => new MoveSystem());
+   worldS5.addSystem(NoopSystem1, () => new NoopSystem1());
+   worldS5.addSystem(NoopSystem2, () => new NoopSystem2());
+   worldS5.addSystem(NoopSystem3, () => new NoopSystem3());
+   worldS5.addSystem(NoopSystem4, () => new NoopSystem4());
+   worldS5.tick(16);
 
-   bench.add("Sekai: tick 5 systems (10k entities)", () => {
+   bench.add("Sekai: tick 5 systems [Sekai-only, 10k]", () => {
       worldS5.tick(16);
    });
 
-   // --- Deferred ops ---
    const worldD = new Sekai();
    worldD.ensureComponentBitFlag(Position);
    worldD.ensureComponentBitFlag(Velocity);
-   // Pre-create entities
    const deferEids: number[] = [];
    for (let i = 0; i < 200; i++) {
       const eid = worldD.createEntity();
@@ -506,14 +609,13 @@ async function runSystemTick() {
       deferEids.push(eid);
    }
 
-   bench.add("Sekai: deferred ops flush (100 batched)", () => {
+   bench.add("Sekai: deferred ops flush (100 batched) [Sekai-only]", () => {
       worldD.deferring = true;
       for (let i = 0; i < 100; i++) {
          worldD.addComponent(deferEids[i], Velocity);
       }
       worldD.deferring = false;
       worldD.flushDeferredOps();
-      // Clean up for next iteration
       for (let i = 0; i < 100; i++) {
          worldD.removeComponent(deferEids[i], Velocity);
       }
@@ -521,16 +623,21 @@ async function runSystemTick() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "System Tick",
+      notes:
+         "⚠️ The Sekai vs bitECS tick comparison is **not apples-to-apples**. Sekai's `tick()` runs the full pipeline (phase dispatch, deferred-op flushing, per-system runner invocation). bitECS has no equivalent scheduler, so its row is a plain function-call loop for reference only. Use these numbers to gauge Sekai's pipeline overhead, not to declare a winner.",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GROUP 5: Real ECS Iteration Pattern
+// GROUP 5: Iteration (Real ECS Pattern)
 // ═══════════════════════════════════════════════════════════════════════════════
 async function runIteration() {
-   const bench = benchDefaults("Iteration (Real ECS)");
+   const bench = benchDefaults("Iteration (Real ECS Pattern)");
    const ENTITY_COUNT = 10_000;
 
-   // --- Sekai: query + read/write ---
    const worldS = new Sekai();
    for (let i = 0; i < ENTITY_COUNT; i++) {
       const eid = worldS.createEntity();
@@ -540,14 +647,12 @@ async function runIteration() {
    const sQuery = worldS.defineQuery({ all: [Position, Velocity] });
    const posS = worldS.getStore(Position);
    const velS = worldS.getStore(Velocity);
-   // Initialize velocity
    const sEnts = sQuery.entities;
    for (let i = 0; i < sEnts.length; i++) {
       velS.vx[sEnts[i]] = 1.0;
       velS.vy[sEnts[i]] = 0.5;
    }
 
-   // --- bitECS: query + read/write ---
    const bitWorld = createWorld({
       components: {
          Pos: {
@@ -588,7 +693,6 @@ async function runIteration() {
          }
       });
 
-   // Multi-component: read from 2 stores, write to 1
    const worldM = new Sekai();
    for (let i = 0; i < ENTITY_COUNT; i++) {
       const eid = worldM.createEntity();
@@ -652,6 +756,12 @@ async function runIteration() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Iteration (Real ECS Pattern)",
+      notes:
+         "Closest to real-world game-loop workloads: query once, read component data, write component data. Typed-array backing means both libraries should be in the same ballpark; delta here reflects query-access and iteration overhead.",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -661,7 +771,6 @@ async function runSerialization() {
    const bench = benchDefaults("Serialization (Sekai-only)");
    const ENTITY_COUNT = 1_000;
 
-   // Setup: world with 1k entities, each with 3 components
    const worldS = new Sekai();
    worldS.ensureComponentBitFlag(Position);
    worldS.ensureComponentBitFlag(Velocity);
@@ -677,7 +786,6 @@ async function runSerialization() {
       worldS.updateComponent(eid, Health, { hp: 100, maxHp: 100 });
    }
 
-   // Pre-capture a snapshot for restore benchmark
    const snapshot = captureWorldSnapshot(worldS);
 
    bench
@@ -686,7 +794,6 @@ async function runSerialization() {
       })
       .add("Sekai: restoreWorldSnapshot (1k entities, 3 components)", () => {
          const freshWorld = new Sekai();
-         // Register component definitions so restore can find them
          freshWorld.ensureComponentBitFlag(Position);
          freshWorld.ensureComponentBitFlag(Velocity);
          freshWorld.ensureComponentBitFlag(Health);
@@ -698,6 +805,12 @@ async function runSerialization() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Serialization (Sekai-only)",
+      notes:
+         "No bitECS equivalent; snapshot/restore is a Sekai feature. Reported for reference on Sekai's own overhead.",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -709,7 +822,6 @@ async function runFragmentation() {
    );
    const ENTITY_COUNT = 46_000;
 
-   // Extra tag components to create archetype variety
    const Tag1 = defineComponent({
       name: "FTag1",
       description: "tag",
@@ -735,7 +847,6 @@ async function runFragmentation() {
       Tag3,
    ];
 
-   // Deterministic shuffle via LCG
    function lcgShuffle(arr: number[]) {
       const out = arr.slice();
       let s = 12345;
@@ -749,7 +860,6 @@ async function runFragmentation() {
       return out;
    }
 
-   // --- Sekai setup ---
    const worldS = new Sekai();
    allDefs.forEach((d) => worldS.ensureComponentBitFlag(d));
 
@@ -758,7 +868,6 @@ async function runFragmentation() {
       const eid = worldS.createEntity();
       worldS.addComponent(eid, Position);
       worldS.addComponent(eid, Velocity);
-      // Vary optional components → 2^4 = 16 archetypes
       if (i % 2 === 0) worldS.addComponent(eid, Health);
       if (i % 3 === 0) worldS.addComponent(eid, Tag1);
       if (i % 5 === 0) worldS.addComponent(eid, Tag2);
@@ -766,16 +875,14 @@ async function runFragmentation() {
       sekaiEids.push(eid);
    }
 
-   // Delete half randomly
    const toDeleteS = lcgShuffle(sekaiEids).slice(0, ENTITY_COUNT / 2);
    for (const eid of toDeleteS) worldS.destructEntity(eid);
 
    const posS = worldS.getStore(Position);
    const velS = worldS.getStore(Velocity);
    const fragQueryS = worldS.defineQuery({ all: [Position, Velocity] });
-   fragQueryS.entities;
+   void fragQueryS.entities;
 
-   // --- bitECS setup ---
    const bitWorld = createWorld({
       components: {
          FPos: {
@@ -806,12 +913,10 @@ async function runFragmentation() {
       bitEids.push(eid);
    }
 
-   // Delete same half (same seed)
    const toDeleteB = lcgShuffle(bitEids).slice(0, ENTITY_COUNT / 2);
    for (const eid of toDeleteB) removeEntity(bitWorld, eid);
 
    const bitFragQ = query(bitWorld, [FPos, FVel]);
-   // const entSekai = fragQueryS.entities;
 
    bench
       .add("Sekai: fragmented iteration (23k alive, 16 archetypes)", () => {
@@ -833,6 +938,12 @@ async function runFragmentation() {
 
    await bench.run();
    printResults(bench);
+   sections.push({
+      name: "Fragmentation",
+      notes:
+         "46k entities created across 16 archetypes (via modular tag composition), then half randomly deleted (deterministic LCG seed = 12345, same victim set on both sides). Measures iteration across many fragmented archetypes — the stress test closest to a mature game scene.",
+      bench,
+   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -841,7 +952,7 @@ async function runFragmentation() {
 async function runAll() {
    console.log("Sekai ECS Benchmark Suite");
    console.log("═".repeat(60));
-   // console.log(`Node ${process.version} | ${process.platform} ${process.arch}`);
+   console.log(`Environment: ${IS_NODE ? "Node" : "Browser"}`);
    console.log(`Bench time: ${BENCH_TIME}ms | Warmup: ${WARMUP_TIME}ms`);
    console.log("═".repeat(60));
 
@@ -850,11 +961,13 @@ async function runAll() {
    await runQueryPerf();
    await runSystemTick();
    await runIteration();
-   await runSerialization();
+   // await runSerialization();
    await runFragmentation();
 
    console.log("\n" + "═".repeat(60));
    console.log("All benchmarks complete.");
+
+   await writeMarkdownNodeOnly(sections);
 }
 
 runAll();
