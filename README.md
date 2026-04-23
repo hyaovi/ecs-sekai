@@ -39,4 +39,4 @@ pnpm run bench:browser    # Browser benchmarks (Vite), console output
 
 ## Notes
 
-Research project focused on performance exploration. API is subject to change. bitECS version used for comparison is pinned in `package.json` and recorded in each `latest-results.md` run.
+Research project focused on performance exploration. API is subject to change. bitECS version used for comparison is pinned in `package.json` and recorded in each [`latest-results.md`](./benchmarks/latest-results.md) run.
